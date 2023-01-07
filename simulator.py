@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 
 import random
+from functools import total_ordering
+
+CARDS_IN_A_HAND = 5
+ROYAL_FLUSH_VALS = set(['A', 'K', 'Q', 'J', 10])
 
 
+@total_ordering
 class Card():
     """Represents a playing card.
        Requires suit = {Hearts, Diamonds, Spades, Clubs} and
@@ -12,11 +17,27 @@ class Card():
         self.suit = suit
         self.val = val
 
+    def get_suit(self):
+        return self.suit
+
+    def get_val(self):
+        return self.val
+
     def __str__(self):
         return f'{self.val} of {self.suit}'
 
     def __repr__(self):
         return str(self)
+
+    def __eq__(self, other):
+        if not isinstance(other, Card):
+            raise Exception("Improper comparison type")
+        return self.suit == other.suit and self.val == other.val
+
+    def __gt__(self, other):
+        if not isinstance(other, Card):
+            raise Exception("Improper comparison type")
+        return self.val > other.val
 
 
 class Deck():
@@ -52,10 +73,47 @@ class Deck():
 
 class Player():
     """Represents a player in a poker game.
-       Strategy in {random, conservative, aggressive}"""
+            Strategy in {random, conservative, aggressive}
+            bal (float): player balance"""
 
-    def __init__(self, strategy='random'):
+    strategies = {
+        'random': lambda args: random.choice(args)
+    }
+
+    def __init__(self, bal, hand=None, strategy='random'):
+        self.bal = bal
+        self.hand = [] if hand is None else hand
         self.strategy = strategy
+
+    def check_hand(self):
+        assert len(self.hand) == CARDS_IN_A_HAND
+
+
+class Hand():
+    """Hand class to be used for checking"""
+
+    def __init__(self, cards):
+        self.cards = cards
+
+    def check_same_suit(self):
+        first_suit = self.cards[0].get_suit()
+        for c in self.cards:
+            if c.get_suit() != first_suit:
+                return False
+        return True
+
+    def check_royal_flush(self):
+        vals = set([c.get_val() for c in self.cards])
+        if self.check_same_suit():
+            return vals == ROYAL_FLUSH_VALS
+        return False
+
+    def check_straight_flush(self):
+        first_suit = self.cards[0].get_suit()
+
+
+
+
 
 
 class PokerGame():
@@ -70,7 +128,16 @@ class PokerGame():
         self.deck = deck
 
 
+
+
+
+
 if __name__ == '__main__':
     deck = Deck()
     deck.shuffle()
-    print(deck.draw(1))
+    # print(deck.draw(1))
+
+    card1 = Card('Hearts', 2)
+    card2 = Card('Hearts', 3)
+    print(card1 > card2)
+    print(card2 > card1)
