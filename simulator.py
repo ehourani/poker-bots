@@ -5,6 +5,8 @@ from functools import total_ordering
 
 CARDS_IN_A_HAND = 5
 ROYAL_FLUSH_VALS = set(['A', 'K', 'Q', 'J', 10])
+VALS_MAPPING = {'J': 11, 'Q': 12, 'K': 13, 'A': 1}
+
 
 
 @total_ordering
@@ -94,6 +96,11 @@ class Hand():
 
     def __init__(self, cards):
         self.cards = cards
+        self.daa = [0] * 13
+        for c in self.cards:
+            val = c.get_val()
+            i = VALS_MAPPING[val] - 1 if val in VALS_MAPPING else val - 1
+            self.daa[i] += 1
 
     def check_same_suit(self):
         first_suit = self.cards[0].get_suit()
@@ -109,8 +116,16 @@ class Hand():
         return False
 
     def check_straight_flush(self):
-        first_suit = self.cards[0].get_suit()
+        if not self.check_same_suit():
+            return False
 
+        # Performs check by looking for '11111' substring in DAA
+        # Accounts for Ace ambiguity by appending first element
+        str_check = ''
+        for i in self.daa:
+            str_check += str(i)
+        str_check += str(self.daa[0])
+        return '11111' in str_check
 
 
 
