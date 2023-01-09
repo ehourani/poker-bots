@@ -112,13 +112,19 @@ class Hand():
         'high card': lambda h: h.check_high_card()
     }
 
-    def __init__(self, cards):
-        self.cards = cards
+    def __init__(self, cards=None):
+        self.cards = [] if cards is None else cards
         self.daa = [0] * 13
         for c in self.cards:
             val = c.get_val()
-            i = VALS_MAPPING[val] - 2   # if val in VALS_MAPPING else val - 2
+            i = VALS_MAPPING[val] - 2
             self.daa[i] += 1
+
+    def add_card(self, card):
+        self.cards += [card]
+        val = card.get_val()
+        i = VALS_MAPPING[val] - 2
+        self.daa[i] += 1
 
     def check_royal_flush(self):
         vals = set([c.get_val() for c in self.cards])
@@ -161,6 +167,8 @@ class Hand():
 
     def get_best_hand(self):
         """Gets the best type of poker hand associated with set of cards."""
+        assert len(self.cards) == CARDS_IN_A_HAND
+
         for hand_check in HAND_RANKINGS:
             checker = self.checkers[hand_check]
             is_hand = checker(self)
@@ -177,6 +185,8 @@ class Hand():
             - Two pair: (C C D D A)
             - One pair: (E E A B C)
         """
+        assert len(self.cards) == CARDS_IN_A_HAND
+
         sorting_arr = []
         for i in range(len(self.daa)):
             count = self.daa[i]
@@ -207,6 +217,21 @@ class Hand():
         if i == other_i:
             return score > other_score
         return i < other_i
+
+    def __str__(self):
+        if len(self.cards) < CARDS_IN_A_HAND:
+            output = 'Incomplete hand:'
+            for c in self.cards:
+                output += '\n' + str(c)
+        else:
+            output = 'Complete hand:\n'
+            output += self.get_best_hand()
+            for c in self.cards:
+                output += '\n' + str(c)
+        return output
+
+    def __repr__(self):
+        return str(self)
 
 
 class PokerGame():

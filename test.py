@@ -186,6 +186,32 @@ def test_high_card(high_card_hand):
     assert high_card_hand.get_sorted() == (12, 8, 7, 6, 1)
 
 
+def test_compare1(royal_flush_hand, straight_flush_hand, four_of_a_kind_hand):
+    assert royal_flush_hand > straight_flush_hand
+    assert straight_flush_hand > four_of_a_kind_hand
+    assert royal_flush_hand > four_of_a_kind_hand
+
+
+def test_compare2(full_house_hand, flush_hand, straight_hand, two_pair_hand):
+    assert full_house_hand > flush_hand
+    assert flush_hand > straight_hand and flush_hand > two_pair_hand
+    assert full_house_hand > straight_hand and full_house_hand > two_pair_hand
+
+
+def test_equality(royal_flush_hand, high_card_hand):
+    # Royal Flush
+    vals = ['A', 'K', 'Q', 'J', 10]
+    royal_flush2 = Hand([Card('Hearts', v) for v in vals])
+    assert royal_flush_hand == royal_flush2
+
+    # High Card
+    high_vals = ['A', 9, 3, 8, 10]
+    suits = ['Diamonds', 'Diamonds', 'Spades', 'Clubs', 'Diamonds']
+    high_hand2 = Hand([Card(suits[i], high_vals[i]) for i in range(len(vals))])
+    assert high_card_hand == high_hand2
+    assert high_hand2 < royal_flush_hand
+
+
 if __name__ == "__main__":
     suit = 'Hearts'
     royal_vals = ['A', 'K', 'Q', 'J', 10]
