@@ -118,15 +118,35 @@ class Hand():
     def check_straight_flush(self):
         if not self.check_same_suit():
             return False
+        return self.check_straight()
 
+    def check_four_of_a_kind(self):
+        return max(self.daa) == 4
+
+    def check_full_house(self):
+        return 3 in self.daa and 2 in self.daa
+
+    def check_flush(self):
+        return self.check_same_suit()
+
+    def check_straight(self):
         # Performs check by looking for '11111' substring in DAA
         # Accounts for Ace ambiguity by appending first element
-        str_check = ''
-        for i in self.daa:
-            str_check += str(i)
+        str_check = ''.join(str(i) for i in self.daa)
         str_check += str(self.daa[0])
         return '11111' in str_check
 
+    def check_three_of_a_kind(self):
+        return max(self.daa) == 3
+
+    def check_two_pair(self):
+        return max(self.daa) == 2 and self.daa.count(2) == 2
+
+    def check_one_pair(self):
+        return max(self.daa) == 2 and self.daa.count(2) == 1
+
+    def check_high_card(self):
+        return True
 
 
 

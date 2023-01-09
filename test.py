@@ -40,15 +40,31 @@ if __name__ == "__main__":
     v2 = ['A', 2, 3, 4, 5]
     v3 = [9, 10, 'J', 'Q', 'K']
     v4 = [10, 'J', 'Q', 'K', 'A']
-    h1, h2, h3, h4 = (Hand([Card(sf_suit, v) for v in v1]),
-                      Hand([Card(sf_suit, v) for v in v2]),
-                      Hand([Card(sf_suit, v) for v in v3]),
-                      Hand([Card(sf_suit, v) for v in v4]))
+    iv1 = ['A', 2, 3, 4, 'K']
+    iv2 = ['J', 'Q', 'A', 2, 'K']
+    iv3 = ['K', 'K', 10, 'J', 'Q']
+    iv4 = [9, 'J', 'Q', 'A', 'K']
+    valid_hands = (Hand([Card(sf_suit, v) for v in v1]),
+                   Hand([Card(sf_suit, v) for v in v2]),
+                   Hand([Card(sf_suit, v) for v in v3]),
+                   Hand([Card(sf_suit, v) for v in v4]))
 
-    assert h1.check_straight_flush()
-    assert h2.check_straight_flush()
-    assert h3.check_straight_flush()
-    assert h4.check_straight_flush()
+    invalid_hands = (Hand([Card(sf_suit, v) for v in iv1]),
+                     Hand([Card(sf_suit, v) for v in iv2]),
+                     Hand([Card(sf_suit, v) for v in iv3]),
+                     Hand([Card(sf_suit, v) for v in iv4]))
+
+    for i in range(len(valid_hands)):
+        h, ih = valid_hands[i], invalid_hands[i]
+        assert h.check_straight_flush()
+        assert not ih.check_straight_flush()
+
+    # Flush check
+    for i in range(len(valid_hands)):
+        h, ih = valid_hands[i], invalid_hands[i]
+        assert h.check_flush()
+        assert ih.check_flush()
+
 
 
 
