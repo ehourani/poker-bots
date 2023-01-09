@@ -102,23 +102,12 @@ class Hand():
             i = VALS_MAPPING[val] - 1 if val in VALS_MAPPING else val - 1
             self.daa[i] += 1
 
-    def check_same_suit(self):
-        first_suit = self.cards[0].get_suit()
-        for c in self.cards:
-            if c.get_suit() != first_suit:
-                return False
-        return True
-
     def check_royal_flush(self):
         vals = set([c.get_val() for c in self.cards])
-        if self.check_same_suit():
-            return vals == ROYAL_FLUSH_VALS
-        return False
+        return vals == ROYAL_FLUSH_VALS and self.check_flush()
 
     def check_straight_flush(self):
-        if not self.check_same_suit():
-            return False
-        return self.check_straight()
+        return self.check_straight() and self.check_flush()
 
     def check_four_of_a_kind(self):
         return max(self.daa) == 4
@@ -127,7 +116,11 @@ class Hand():
         return 3 in self.daa and 2 in self.daa
 
     def check_flush(self):
-        return self.check_same_suit()
+        first_suit = self.cards[0].get_suit()
+        for c in self.cards:
+            if c.get_suit() != first_suit:
+                return False
+        return True
 
     def check_straight(self):
         # Performs check by looking for '11111' substring in DAA
