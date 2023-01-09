@@ -5,8 +5,12 @@ from functools import total_ordering
 
 CARDS_IN_A_HAND = 5
 ROYAL_FLUSH_VALS = set(['A', 'K', 'Q', 'J', 10])
-VALS_MAPPING = {'J': 11, 'Q': 12, 'K': 13, 'A': 1}
-
+VALS_MAPPING = {2: 2, 3: 3, 4: 4, 5: 5, 6: 6,
+                7: 7, 8: 8, 9: 9, 10: 10, 'J': 11,
+                'Q': 12, 'K': 13, 'A': 14}
+HAND_RANKINGS = ['royal flush', 'straight flush', 'four of a kind',
+                 'full house', 'flush', 'straight', 'three of a kind',
+                 'two pair', 'one pair', 'high card']
 
 
 @total_ordering
@@ -33,12 +37,12 @@ class Card():
 
     def __eq__(self, other):
         if not isinstance(other, Card):
-            raise Exception("Improper comparison type")
+            raise TypeError("Improper comparison type")
         return self.suit == other.suit and self.val == other.val
 
     def __gt__(self, other):
         if not isinstance(other, Card):
-            raise Exception("Improper comparison type")
+            raise TypeError("Improper comparison type")
         return self.val > other.val
 
 
@@ -91,15 +95,29 @@ class Player():
         assert len(self.hand) == CARDS_IN_A_HAND
 
 
+@total_ordering
 class Hand():
     """Hand class to be used for checking"""
+
+    checkers = {
+        'royal flush': lambda h: h.check_royal_flush(),
+        'straight flush': lambda h: h.check_straight_flush(),
+        'four of a kind': lambda h: h.check_four_of_a_kind(),
+        'full house': lambda h: h.check_full_house(),
+        'flush': lambda h: h.check_flush(),
+        'straight': lambda h: h.check_straight(),
+        'three of a kind': lambda h: h.check_three_of_a_kind(),
+        'two pair': lambda h: h.check_two_pair(),
+        'one pair': lambda h: h.check_one_pair(),
+        'high card': lambda h: h.check_high_card()
+    }
 
     def __init__(self, cards):
         self.cards = cards
         self.daa = [0] * 13
         for c in self.cards:
             val = c.get_val()
-            i = VALS_MAPPING[val] - 1 if val in VALS_MAPPING else val - 1
+            i = VALS_MAPPING[val] - 2   # if val in VALS_MAPPING else val - 2
             self.daa[i] += 1
 
     def check_royal_flush(self):
@@ -113,7 +131,7 @@ class Hand():
         return max(self.daa) == 4
 
     def check_full_house(self):
-        return 3 in self.daa and 2 in self.daa
+        return self.daa.count(3) == 1 and self.daa.count(2) == 1
 
     def check_flush(self):
         first_suit = self.cards[0].get_suit()
@@ -124,9 +142,9 @@ class Hand():
 
     def check_straight(self):
         # Performs check by looking for '11111' substring in DAA
-        # Accounts for Ace ambiguity by appending first element
-        str_check = ''.join(str(i) for i in self.daa)
-        str_check += str(self.daa[0])
+        # Accounts for Ace ambiguity by appending last element
+        ace = str(self.daa[-1])
+        str_check = ace + ''.join(str(i) for i in self.daa)
         return '11111' in str_check
 
     def check_three_of_a_kind(self):
@@ -141,7 +159,54 @@ class Hand():
     def check_high_card(self):
         return True
 
+    def get_best_hand(self):
+        """Gets the best type of poker hand associated with set of cards."""
+        for hand_check in HAND_RANKINGS:
+            checker = self.checkers[hand_check]
+            is_hand = checker(self)
+            if is_hand:
+                return hand_check
 
+    def get_sorted(self):
+        """Assumes this will be compared to another of the same type. See below
+        return values {A > B > C > D > E}:
+            - Royal flush/flush/high card/straight (flush): (A B C D E)
+            - Four of a kind: (B B B B A)
+            - Full house: (C C C A A)
+            - Three of a kind: (D D D B C)
+            - Two pair: (C C D D A)
+            - One pair: (E E A B C)
+        """
+        sorting_arr = []
+        for i in range(len(self.daa)):
+            count = self.daa[i]
+            if count > 0:
+                sorting_arr.append((count, i))
+        sorting_arr.sort(reverse=True)
+
+        sorted_score = ()
+        for cnt, num in sorting_arr:
+            sorted_score += (num, ) * cnt
+        return sorted_score
+
+    def __eq__(self, other):
+        if not isinstance(other, Hand):
+            raise TypeError("Improper comparison type")
+        best, score = self.get_best_hand(), self.get_sorted()
+        other_best, other_score = other.get_best_hand(), other.get_sorted()
+        return best == other_best and score == other_score
+
+    def __gt__(self, other):
+        if not isinstance(other, Hand):
+            raise TypeError("Improper comparison type")
+        hand_type, score = self.get_best_hand(), self.get_sorted()
+        other_type, other_score = other.get_best_hand(), other.get_sorted()
+        i = HAND_RANKINGS.index(hand_type)
+        other_i = HAND_RANKINGS.index(other_type)
+
+        if i == other_i:
+            return score > other_score
+        return i < other_i
 
 
 class PokerGame():
