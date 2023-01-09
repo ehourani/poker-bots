@@ -10,6 +10,8 @@ from simulator import Card, Hand  # , Deck, Player, PokerGame
 TEST_DIRECTORY = os.path.dirname(__file__)
 
 
+# ===================== FOUNDATIONS =====================
+
 @pytest.fixture
 def high_card():
     return Card('Spades', 'A')
@@ -28,7 +30,7 @@ def royal_flush_hand():
 
 @pytest.fixture
 def straight_flush_hand():
-    vals = [9, 'K', 'Q', 'J', 10]
+    vals = [9, 6, 7, 8, 10]
     return Hand([Card('Hearts', v) for v in vals])
 
 
@@ -55,7 +57,8 @@ def flush_hand():
 @pytest.fixture
 def straight_hand():
     vals = ['A', 'K', 'Q', 'J', 10]
-    return Hand([Card('Clubs', v) for v in vals])
+    suits = ['Clubs', 'Hearts', 'Diamonds', 'Spades', 'Hearts']
+    return Hand([Card(suits[i], vals[i]) for i in range(len(vals))])
 
 
 @pytest.fixture
@@ -82,7 +85,105 @@ def one_pair_hand():
 @pytest.fixture
 def high_card_hand():
     vals = ['A', 3, 9, 8, 10]
-    return Hand([Card('Clubs', v) for v in vals])
+    suits = ['Hearts', 'Diamonds', 'Clubs', 'Hearts', 'Spades']
+    return Hand([Card(suits[i], vals[i]) for i in range(len(vals))])
+
+
+# =====================TESTS =====================
+
+def test_royal_flush(royal_flush_hand):
+    assert royal_flush_hand.check_royal_flush()
+    assert royal_flush_hand.get_sorted() == (12, 11, 10, 9, 8)
+
+
+def test_straight_flush(straight_flush_hand):
+    assert not straight_flush_hand.check_royal_flush()
+    assert straight_flush_hand.check_straight_flush()
+    assert straight_flush_hand.get_sorted() == (8, 7, 6, 5, 4)
+
+
+def test_four_of_a_kind(four_of_a_kind_hand):
+    assert not four_of_a_kind_hand.check_royal_flush()
+    assert not four_of_a_kind_hand.check_straight_flush()
+    assert four_of_a_kind_hand.check_four_of_a_kind()
+    assert four_of_a_kind_hand.get_sorted() == (12, 12, 12, 12, 8)
+
+
+def test_full_house(full_house_hand):
+    assert not full_house_hand.check_royal_flush()
+    assert not full_house_hand.check_straight_flush()
+    assert not full_house_hand.check_four_of_a_kind()
+    assert full_house_hand.check_full_house()
+    assert full_house_hand.get_sorted() == (10, 10, 10, 8, 8)
+
+
+def test_flush(flush_hand):
+    assert not flush_hand.check_royal_flush()
+    assert not flush_hand.check_straight_flush()
+    assert not flush_hand.check_four_of_a_kind()
+    assert not flush_hand.check_full_house()
+    assert flush_hand.check_flush()
+    assert flush_hand.get_sorted() == (12, 9, 8, 7, 0)
+
+
+def test_straight(straight_hand):
+    assert not straight_hand.check_royal_flush()
+    assert not straight_hand.check_straight_flush()
+    assert not straight_hand.check_four_of_a_kind()
+    assert not straight_hand.check_full_house()
+    assert not straight_hand.check_flush()
+    assert straight_hand.check_straight()
+    assert straight_hand.get_sorted() == (12, 11, 10, 9, 8)
+
+
+def test_three_of_a_kind(three_of_a_kind_hand):
+    assert not three_of_a_kind_hand.check_royal_flush()
+    assert not three_of_a_kind_hand.check_straight_flush()
+    assert not three_of_a_kind_hand.check_four_of_a_kind()
+    assert not three_of_a_kind_hand.check_full_house()
+    assert not three_of_a_kind_hand.check_flush()
+    assert not three_of_a_kind_hand.check_straight()
+    assert three_of_a_kind_hand.check_three_of_a_kind()
+    assert three_of_a_kind_hand.get_sorted() == (8, 8, 8, 10, 9)
+
+
+def test_two_pair(two_pair_hand):
+    assert not two_pair_hand.check_royal_flush()
+    assert not two_pair_hand.check_straight_flush()
+    assert not two_pair_hand.check_four_of_a_kind()
+    assert not two_pair_hand.check_full_house()
+    assert not two_pair_hand.check_flush()
+    assert not two_pair_hand.check_straight()
+    assert not two_pair_hand.check_three_of_a_kind()
+    assert two_pair_hand.check_two_pair()
+    assert two_pair_hand.get_sorted() == (11, 11, 7, 7, 9)
+
+
+def test_one_pair(one_pair_hand):
+    assert not one_pair_hand.check_royal_flush()
+    assert not one_pair_hand.check_straight_flush()
+    assert not one_pair_hand.check_four_of_a_kind()
+    assert not one_pair_hand.check_full_house()
+    assert not one_pair_hand.check_flush()
+    assert not one_pair_hand.check_straight()
+    assert not one_pair_hand.check_three_of_a_kind()
+    assert not one_pair_hand.check_two_pair()
+    assert one_pair_hand.check_one_pair()
+    assert one_pair_hand.get_sorted() == (0, 0, 8, 7, 2)
+
+
+def test_high_card(high_card_hand):
+    assert not high_card_hand.check_royal_flush()
+    assert not high_card_hand.check_straight_flush()
+    assert not high_card_hand.check_four_of_a_kind()
+    assert not high_card_hand.check_full_house()
+    assert not high_card_hand.check_flush()
+    assert not high_card_hand.check_straight()
+    assert not high_card_hand.check_three_of_a_kind()
+    assert not high_card_hand.check_two_pair()
+    assert not high_card_hand.check_one_pair()
+    assert high_card_hand.check_high_card()
+    assert high_card_hand.get_sorted() == (12, 8, 7, 6, 1)
 
 
 if __name__ == "__main__":
@@ -124,12 +225,12 @@ if __name__ == "__main__":
         h, ih = valid_hands[i], invalid_hands[i]
         assert h.check_flush()
         assert ih.check_flush()
-        print(h.get_best_hand())
+        # print(h.get_best_hand())
         # print(h.get_sorted())
-        print(ih.get_best_hand())
+        # print(ih.get_best_hand())
         # print(ih.get_sorted())
 
-    print(hand.get_best_hand())
+    # print(hand.get_best_hand())
 
 
 
