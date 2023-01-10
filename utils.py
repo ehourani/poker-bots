@@ -72,14 +72,18 @@ class Deck():
             raise Exception("Not enough cards in deck")
 
         for i in range(num_cards):
-            cards += [self.deck[i - 1]]
-            self.deck = [] + self.deck[i:]
+            cards.append(self.deck[-1])
+            self.deck = self.deck[:-1]
         return cards
+
+    def get_num_cards(self):
+        return len(self.deck)
 
 
 class Player():
     """Represents a player in a poker game.
             Strategy in {random, conservative, aggressive}
+            hand (Hand): player's current hand
             bal (float): player balance"""
 
     strategies = {
@@ -88,7 +92,7 @@ class Player():
 
     def __init__(self, bal, hand=None, strategy='random'):
         self.bal = bal
-        self.hand = [] if hand is None else hand
+        self.hand = Hand() if hand is None else hand
         self.strategy = strategy
 
     def check_hand(self):
@@ -241,21 +245,12 @@ class PokerGame():
        """
 
     def __init__(self, players, deck):
-        assert len(players > 2)
+        assert len(players) > 2
         self.players = players
         self.deck = deck
-
-
-
-
 
 
 if __name__ == '__main__':
     deck = Deck()
     deck.shuffle()
     # print(deck.draw(1))
-
-    card1 = Card('Hearts', 2)
-    card2 = Card('Hearts', 3)
-    print(card1 > card2)
-    print(card2 > card1)
