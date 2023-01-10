@@ -94,9 +94,33 @@ class Player():
         self.bal = bal
         self.hand = Hand() if hand is None else hand
         self.strategy = strategy
+        self.active_flag = True
 
-    def check_hand(self):
-        assert len(self.hand) == CARDS_IN_A_HAND
+    def has_full_hand(self):
+        return len(self.hand) == CARDS_IN_A_HAND
+
+    def get_hand(self):
+        return Hand(self.hand.get_cards())
+
+    def get_bal(self):
+        return self.bal
+
+    def pay(self, amount, poker_game):
+        if amount > self.bal:
+            raise Exception("Not enough money")
+        self.bal -= amount
+        poker_game.add_to_pot(amount)
+
+    def receive(self, amount, poker_game):
+        poker_game.remove_from_pot(amount)
+        self.bal += amount
+
+    # Moving activity to pokergame
+    # def get_status(self):
+    #     return self.active_flag
+
+    # def set_status(self, status):
+    #     self.active_flag = status
 
 
 @total_ordering
@@ -123,6 +147,12 @@ class Hand():
             val = c.get_val()
             i = VALS_MAPPING[val] - 2
             self.daa[i] += 1
+
+    def get_cards(self):
+        cards_list = []
+        for card in self.cards:
+            cards_list.append(Card(card.get_suit(), card.get_val()))
+        return cards_list
 
     def add_card(self, card):
         self.cards += [card]
@@ -241,13 +271,33 @@ class Hand():
 class PokerGame():
     """Represents a poker game (Texas Hold 'em). Args:
             players (list of Player objects): all participating players
-            deck (Deck): deck that will be played with
        """
 
-    def __init__(self, players, deck):
+    def __init__(self, players):
         assert len(players) > 2
         self.players = players
-        self.deck = deck
+        self.deck = Deck()
+        self.deck.shuffle()                     # Start with shuffled deck
+        self.turn = 0                           # Start on 0th turn
+        self.pot = 0                            # Start with $0 in the pot
+        self.active_players = self.players[:]   # Track active players
+
+    def add_to_pot(self, amount):
+        self.pot += amount
+
+    def remove_from_pot(self, amount):
+        if amount > self.pot:
+            raise Exception("Not enough money")
+        self.pot -= amount
+
+    def get_active_players(self):
+        active = []
+        for player in self.active_players:
+            active.append(player)
+        return active
+
+    def deactive_player(self, player):
+        self.active_players.remove(player)
 
 
 if __name__ == '__main__':
