@@ -4,6 +4,8 @@ import random
 from functools import total_ordering
 
 CARDS_IN_A_HAND = 5
+STARTING_NUM_CARDS = 2
+MAX_CARDS_ON_TABLE = 3
 ROYAL_FLUSH_VALS = set(['A', 'K', 'Q', 'J', 10])
 VALS_MAPPING = {2: 2, 3: 3, 4: 4, 5: 5, 6: 6,
                 7: 7, 8: 8, 9: 9, 10: 10, 'J': 11,
@@ -11,6 +13,10 @@ VALS_MAPPING = {2: 2, 3: 3, 4: 4, 5: 5, 6: 6,
 HAND_RANKINGS = ['royal flush', 'straight flush', 'four of a kind',
                  'full house', 'flush', 'straight', 'three of a kind',
                  'two pair', 'one pair', 'high card']
+
+
+def next_i(start, array):
+    return (start + 1) % len(array)
 
 
 @total_ordering
@@ -90,8 +96,9 @@ class Player():
         'random': lambda args: random.choice(args)
     }
 
-    def __init__(self, bal, hand=None, strategy='random'):
+    def __init__(self, bal, name, hand=None, strategy='random'):
         self.bal = bal
+        self.name = name
         self.hand = Hand() if hand is None else hand
         self.strategy = strategy
         self.active_flag = True
@@ -102,25 +109,30 @@ class Player():
     def get_hand(self):
         return Hand(self.hand.get_cards())
 
+    def add_card(self, card):
+        self.hand.add_card(card)
+
     def get_bal(self):
         return self.bal
 
-    def pay(self, amount, poker_game):
+    def pay(self, amount):
         if amount > self.bal:
             raise Exception("Not enough money")
         self.bal -= amount
-        poker_game.add_to_pot(amount)
 
-    def receive(self, amount, poker_game):
-        poker_game.remove_from_pot(amount)
+    def receive_bal(self, amount):
         self.bal += amount
 
-    # Moving activity to pokergame
-    # def get_status(self):
-    #     return self.active_flag
+    def action(self):
+        return 'Fold', 0
 
-    # def set_status(self, status):
-    #     self.active_flag = status
+    def __str__(self):
+        player_str = f'Player: {self.name}\nBal: {self.bal}\n' + \
+                     f'Strategy: {self.strategy}\nHand {self.hand}'
+        return player_str
+
+    def __repr__(self):
+        return str(self)
 
 
 @total_ordering
@@ -155,6 +167,7 @@ class Hand():
         return cards_list
 
     def add_card(self, card):
+        assert isinstance(card, Card)
         self.cards += [card]
         val = card.get_val()
         i = VALS_MAPPING[val] - 2
@@ -254,14 +267,14 @@ class Hand():
 
     def __str__(self):
         if len(self.cards) < CARDS_IN_A_HAND:
-            output = 'Incomplete hand:'
+            output = '(Incomplete hand):'
             for c in self.cards:
-                output += '\n' + str(c)
+                output += '\n\t' + str(c)
         else:
-            output = 'Complete hand:\n'
+            output = '(Complete hand):\n'
             output += self.get_best_hand()
             for c in self.cards:
-                output += '\n' + str(c)
+                output += '\n\t' + str(c)
         return output
 
     def __repr__(self):
@@ -271,16 +284,52 @@ class Hand():
 class PokerGame():
     """Represents a poker game (Texas Hold 'em). Args:
             players (list of Player objects): all participating players
-       """
 
-    def __init__(self, players):
+    Poker game round progression:
+        1. Deal out 2 cards to each player
+        2. Small blind pays n/2 to the pot
+        3. Big blind pays n to the pot
+        4. Deal 1 card on the table
+        5. One by one, players decide to check, raise, or fold until:
+            - All players have checked; small/big blind move to next player
+            - Only 1 player is left; they pocket the pot
+        6. Steps 4 & 5 are repeated until either:
+            - Only 1 player is left; they pocket the pot
+            - 3 cards are on the table; each player compares hands for winner
+    """
+
+    def __init__(self, players, cost):
         assert len(players) > 2
+
+        # Unchanging class attributes (game-level)
         self.players = players
+        self.cost = cost
         self.deck = Deck()
-        self.deck.shuffle()                     # Start with shuffled deck
-        self.turn = 0                           # Start on 0th turn
-        self.pot = 0                            # Start with $0 in the pot
-        self.active_players = self.players[:]   # Track active players
+        self.deck.shuffle()                         # Start with shuffled deck
+        # self.game = 0                               # Start with game 0
+
+        # Changing class attributes (round-level)
+        self.round = 0                                     # Start on 0th round
+        self.pot = 0                                       # Start $0 in pot
+        self.round_cost = self.cost                        # Cost to play round
+        self.table = []                                    # Cards at play
+        self.small_i = self.round % len(self.players)      # 1st small
+        self.big_i = (self.round + 1) % len(self.players)  # 1st big
+        self.current_bet = self.cost                       # Cost to play
+        self.player_status = {}
+        for player in self.players:
+            self.player_status[player] = 'Active'
+        # self.active_players = self.players[:]       # Track active players
+
+    def reset_game(self):
+        self.pot = 0
+        self.round += 1
+        self.round_cost = self.cost
+        self.table = []
+        self.small_i = self.round % len(self.players)      # 1st small
+        self.big_i = (self.round + 1) % len(self.players)  # 1st big
+        for player in self.players:
+            self.player_status[player] = 'Active'
 
     def add_to_pot(self, amount):
         self.pot += amount
@@ -291,16 +340,173 @@ class PokerGame():
         self.pot -= amount
 
     def get_active_players(self):
-        active = []
-        for player in self.active_players:
-            active.append(player)
-        return active
+        active_players = []
+        for player in self.players:
+            status = self.player_status[player]
+            if status == 'Active' or status == 'Checked':
+                active_players.append(player)
+        return active_players
 
-    def deactive_player(self, player):
-        self.active_players.remove(player)
+    def deactivate_player(self, player):
+        self.player_status[player] = 'Folded'
+
+    def is_all_checked(self):
+        for player in self.player_status:
+            if self.player_status[player] != 'Checked':
+                return False
+        return True
+
+    def get_all_checked(self):
+        checked_players = []
+        for player in self.player_status:
+            if self.player_status[player] == 'Checked':
+                checked_players.append(player)
+        return checked_players
+
+    def play_round(self):
+        assert len(self.table) <= MAX_CARDS_ON_TABLE
+
+        # 1. Initialize game if it's first turn
+        if self.round == 0:
+            for i in range(STARTING_NUM_CARDS):
+                for player in self.get_active_players():
+                    card_list = self.deck.draw(1)
+                    card = card_list[0]
+                    player.add_card(card)
+
+        # 2. Draw a card on the table
+        self.table += self.deck.draw(1)
+
+        # 3, 4. Big/small blind assigned and pay    # TODO: Add all-in support
+        active = self.get_active_players()
+        small_blind, big_blind = active[self.small_i], active[self.big_i]
+        small_blind.pay(self.cost // 2)
+        big_blind.pay(self.cost)
+        self.add_to_pot(self.cost + self.cost // 2)
+
+        # Set initial player index
+        playing_i = next_i(self.big_i, active)
+
+        # 5. Loop over players until all but 1 fold
+        while len(self.get_active_players()) > 1 and len(self.table) <= 3:
+
+            # If all players checked, draw 1 card and reactivate
+            if self.is_all_checked():
+                self.table += self.deck.draw(1)
+                for player in self.get_all_checked():
+                    self.player_status[player] = 'Active'
+                self.round_cost = 0
+
+            # Get action of the player whose turn it is
+            turn_player = self.get_active_players()[playing_i]
+            action, amount = turn_player.action()
+            match action:
+                case 'Fold':
+                    self.deactivate_player(turn_player)
+
+                case 'Check':
+                    turn_player.pay(self.round_cost)
+                    self.add_to_pot(self.round_cost)
+                    self.player_status[turn_player] = 'Checked'
+
+                case 'Raise':
+                    amount_raised = amount - self.round_cost
+                    turn_player.pay(amount_raised)
+                    self.add_to_pot(amount_raised)
+                    for player in self.get_active_players():
+                        self.player_status[player] = 'Active'
+                    self.player_status[turn_player] = 'Checked'
+
+                case _:
+                    raise ValueError("Unexpected player action")
+
+            # Get next player
+            playing_i = next_i(playing_i, self.get_active_players())
+
+        # Exit condition 1: all players but 1 folded; reset game and pay winner
+        if len(self.get_active_players()) == 1:
+            turn_player.pay(self.pot)
+            self.remove_from_pot(self.pot)
+            self.reset_game()
+
+        # Exit condition 2: 3 cards on table; evaluate best hand and pay winner
+        elif len(self.table) == 3:
+            winner, winning_hand = None, None
+            for player in self.players:
+                eval_cards = player.get_hand().get_cards() + self.table[:]
+                assert len(eval_cards) == CARDS_IN_A_HAND
+                eval_hand = Hand(eval_cards)
+                if winner is None:
+                    winner, winning_hand = [player], eval_hand
+                elif winning_hand < eval_hand:
+                    winner, winning_hand = [player], eval_hand
+                elif winning_hand == eval_hand:
+                    winner.append(player)
+            winner.pay(self.pot)
+            self.remove_from_pot(self.pot)
+            self.reset_game()
+
+
+"""
+Round function:
+    - If first turn:
+        - Give everyone 2 cards
+    - General case:
+        - Initiate little/big blind based on round
+        - Draw 1 card on table
+        - Have little/big blind pay
+        - Loop over all players until exit condition reached:
+            - Each player raises/checks/folds
+            - Exit condition: 1 non-fold left
+            - All checked: Add 1 more card (max 3)
+        - Do based on exit condition:
+            - 1 player: Give pot, increment round
+
+
+
+
+
+
+INDEPENDENT OF TURN:
+    - players
+    - cost
+    - deck
+
+CHANGES EVERY TURN:
+    - turn
+    - pot
+    - active players
+    - table cards
+    - small/big blind
+    - current cost to play
+    - player status
+
+
+
+Possible statuses:
+    - Active (hasn't checked/folded yet)
+    - Folded (no longer in game, inactive)
+    - Checked (awaiting next card)
+
+Data structures:
+    - Status list
+    - Dictionary of {player : status}
+        - Can pull player status
+        - Iterate to get all active players
+    - Dictionary of {status : player}
+        - Can pull all active players
+        - Needs helper function to get status
+    - Player class tracking
+"""
 
 
 if __name__ == '__main__':
-    deck = Deck()
-    deck.shuffle()
-    # print(deck.draw(1))
+    # deck = Deck()
+    # deck.shuffle()
+
+    p1, p2, p3 = Player(100, 'John'), Player(100, 'Emily'), Player(100, 'Sam')
+    game = PokerGame([p1, p2, p3], 10)
+    game.play_round()
+    print(p1)
+
+    # game.first_round()
