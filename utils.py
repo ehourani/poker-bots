@@ -51,6 +51,9 @@ class Card():
             raise TypeError("Improper comparison type")
         return self.val > other.val
 
+    def __hash__(self):
+        return hash((self.suit, self.val))
+
 
 class Deck():
     """Represents a deck of cards as an array.
@@ -101,7 +104,6 @@ class Player():
         self.name = name
         self.hand = Hand() if hand is None else hand
         self.strategy = strategy
-        self.active_flag = True
 
     def has_full_hand(self):
         return len(self.hand) == CARDS_IN_A_HAND
@@ -115,16 +117,19 @@ class Player():
     def get_bal(self):
         return self.bal
 
-    def pay(self, amount):
-        if amount > self.bal:
-            raise Exception("Not enough money")
-        self.bal -= amount
+    def set_bal(self, bal):
+        if bal < 0:
+            raise Exception("Negative bal; player cannot go in debt")
+        self.bal = bal
 
-    def receive_bal(self, amount):
-        self.bal += amount
-
-    def action(self):
+    def action(self, action=None):
+        if action is not None:
+            return action
         return 'Fold', 0
+
+    # def __eq__(self, other):
+        # return self.bal == other.bal and self.name == other.name and \
+        #     self.hand == other.hand and self.strategy == other.strategy
 
     def __str__(self):
         player_str = f'Player: {self.name}\nBal: {self.bal}\n' + \
@@ -133,6 +138,9 @@ class Player():
 
     def __repr__(self):
         return str(self)
+
+    # def __hash__(self):
+    #     return hash((self.bal, self.name, self.hand, self.strategy))
 
 
 @total_ordering
@@ -280,6 +288,10 @@ class Hand():
     def __repr__(self):
         return str(self)
 
+    def __hash__(self):
+        cards_tup = tuple(self.cards)
+        return hash(cards_tup)
+
 
 class PokerGame():
     """Represents a poker game (Texas Hold 'em). Args:
@@ -306,7 +318,6 @@ class PokerGame():
         self.cost = cost
         self.deck = Deck()
         self.deck.shuffle()                         # Start with shuffled deck
-        # self.game = 0                               # Start with game 0
 
         # Changing class attributes (round-level)
         self.round = 0                                     # Start on 0th round
@@ -315,11 +326,27 @@ class PokerGame():
         self.table = []                                    # Cards at play
         self.small_i = self.round % len(self.players)      # 1st small
         self.big_i = (self.round + 1) % len(self.players)  # 1st big
-        self.current_bet = self.cost                       # Cost to play
         self.player_status = {}
-        for player in self.players:
+        for player in players:
             self.player_status[player] = 'Active'
-        # self.active_players = self.players[:]       # Track active players
+
+    def get_round_cost(self):
+        return self.round_cost
+
+    def get_pot(self):
+        return self.pot
+
+    def get_table(self):
+        return self.table[:]
+
+    def get_round(self):
+        return self.round
+
+    def get_blind_indices(self):
+        return self.small_i, self.big_i
+
+    def get_player_status(self):
+        return self.player_status.copy()
 
     def reset_game(self):
         self.pot = 0
@@ -331,20 +358,25 @@ class PokerGame():
         for player in self.players:
             self.player_status[player] = 'Active'
 
-    def add_to_pot(self, amount):
+    def collect_payment(self, amount, player):
+        new_player_bal = player.get_bal() - amount
+        player.set_bal(new_player_bal)
         self.pot += amount
 
-    def remove_from_pot(self, amount):
+    def pay_player(self, amount, player):
         if amount > self.pot:
             raise Exception("Not enough money")
+        new_player_bal = player.get_bal() + amount
         self.pot -= amount
+        player.set_bal(new_player_bal)
 
     def get_active_players(self):
-        active_players = []
+        active_players = set()
         for player in self.players:
+            print('\nPlayer', player, '\nStatus', self.player_status)
             status = self.player_status[player]
             if status == 'Active' or status == 'Checked':
-                active_players.append(player)
+                active_players.add(player)
         return active_players
 
     def deactivate_player(self, player):
@@ -357,11 +389,30 @@ class PokerGame():
         return True
 
     def get_all_checked(self):
-        checked_players = []
+        checked_players = set()
         for player in self.player_status:
             if self.player_status[player] == 'Checked':
-                checked_players.append(player)
+                checked_players.add(player)
         return checked_players
+
+    def execute_action(self, player, action, amount):
+        match action:
+            case 'Fold':
+                self.deactivate_player(player)
+
+            case 'Check':
+                self.collect_payment(self.round_cost, player)
+                self.player_status[player] = 'Checked'
+
+            case 'Raise':
+                self.collect_payment(amount, player)
+                self.round_cost += amount
+                for other_player in self.get_active_players():
+                    self.player_status[other_player] = 'Active'
+                self.player_status[player] = 'Checked'
+
+            case _:
+                raise ValueError("Unexpected player action")
 
     def play_round(self):
         assert len(self.table) <= MAX_CARDS_ON_TABLE
@@ -380,9 +431,8 @@ class PokerGame():
         # 3, 4. Big/small blind assigned and pay    # TODO: Add all-in support
         active = self.get_active_players()
         small_blind, big_blind = active[self.small_i], active[self.big_i]
-        small_blind.pay(self.cost // 2)
-        big_blind.pay(self.cost)
-        self.add_to_pot(self.cost + self.cost // 2)
+        self.collect_payment(self.cost // 2, small_blind)
+        self.collect_payment(self.cost, big_blind)
 
         # Set initial player index
         playing_i = next_i(self.big_i, active)
@@ -400,39 +450,19 @@ class PokerGame():
             # Get action of the player whose turn it is
             turn_player = self.get_active_players()[playing_i]
             action, amount = turn_player.action()
-            match action:
-                case 'Fold':
-                    self.deactivate_player(turn_player)
-
-                case 'Check':
-                    turn_player.pay(self.round_cost)
-                    self.add_to_pot(self.round_cost)
-                    self.player_status[turn_player] = 'Checked'
-
-                case 'Raise':
-                    amount_raised = amount - self.round_cost
-                    turn_player.pay(amount_raised)
-                    self.add_to_pot(amount_raised)
-                    for player in self.get_active_players():
-                        self.player_status[player] = 'Active'
-                    self.player_status[turn_player] = 'Checked'
-
-                case _:
-                    raise ValueError("Unexpected player action")
+            self.execute_action(turn_player, action, amount)
 
             # Get next player
             playing_i = next_i(playing_i, self.get_active_players())
 
         # Exit condition 1: all players but 1 folded; reset game and pay winner
         if len(self.get_active_players()) == 1:
-            turn_player.pay(self.pot)
-            self.remove_from_pot(self.pot)
-            self.reset_game()
+            winner = [turn_player]
 
         # Exit condition 2: 3 cards on table; evaluate best hand and pay winner
         elif len(self.table) == 3:
             winner, winning_hand = None, None
-            for player in self.players:
+            for player in self.get_active_players():
                 eval_cards = player.get_hand().get_cards() + self.table[:]
                 assert len(eval_cards) == CARDS_IN_A_HAND
                 eval_hand = Hand(eval_cards)
@@ -442,9 +472,11 @@ class PokerGame():
                     winner, winning_hand = [player], eval_hand
                 elif winning_hand == eval_hand:
                     winner.append(player)
-            winner.pay(self.pot)
-            self.remove_from_pot(self.pot)
-            self.reset_game()
+
+        # Pay winner and reset game
+        [self.pay_player(self.pot // len(winner), p) for p in winner]
+        self.reset_game()
+        return winner
 
 
 """

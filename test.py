@@ -5,12 +5,12 @@ import pytest
 # import sys
 # import copy
 
-from simulator import Card, Hand  # , Deck, Player, PokerGame
+from utils import Card, Hand, Deck, Player, PokerGame
 
 TEST_DIRECTORY = os.path.dirname(__file__)
 
 
-# ===================== FOUNDATIONS =====================
+# ===================== HAND FOUNDATIONS =====================
 
 @pytest.fixture
 def high_card():
@@ -89,7 +89,14 @@ def high_card_hand():
     return Hand([Card(suits[i], vals[i]) for i in range(len(vals))])
 
 
-# =====================TESTS =====================
+# PokerGame Test
+@pytest.fixture
+def three_player_game():
+    players = [Player(100, 'Dan'), Player(100, 'Sam'), Player(100, 'Emma')]
+    return PokerGame(players, cost=10)
+
+
+# ===================== HAND TESTS =====================
 
 def test_royal_flush(royal_flush_hand):
     assert royal_flush_hand.check_royal_flush()
@@ -212,56 +219,81 @@ def test_equality(royal_flush_hand, high_card_hand):
     assert high_hand2 < royal_flush_hand
 
 
+# ===================== POKER GAME TESTS =====================
+
+# def test_config(three_player_game):
+#     p1, p2, p3 = Player(100, 'Dan'), Player(100, 'Sam'), Player(100, 'Emma')
+#     active = three_player_game.get_active_players()
+#     assert p1 in active
+#     assert p2 in active
+#     assert p3 in active
+
+
+def test_fold(three_player_game):
+    dan, sam, emma = three_player_game.get_active_players()
+    three_player_game.execute_action(dan, 'Fold', 0)
+    assert len(three_player_game.get_active_players()) == 2
+
+
+def test_check(three_player_game):
+    dan, sam, emma = three_player_game.get_active_players()
+    three_player_game.execute_action(dan, 'Check', 0)
+    print(three_player_game.get_player_status())
+    assert len(three_player_game.get_all_checked()) == 1
+
+
+def test_raise(three_player_game):
+    dan, sam, emma = three_player_game.get_active_players()
+    three_player_game.execute_action(dan, 'Raise', 10)
+    assert three_player_game.get_round_cost() == 20
+    assert dan.get_bal() == 90
+
+
+
+
 if __name__ == "__main__":
-    suit = 'Hearts'
-    royal_vals = ['A', 'K', 'Q', 'J', 10]
-    not_royal_vals = ['A', 'K', 'K', 'J', 10]
-    hand = Hand([Card(suit, v) for v in royal_vals])
-    not_royal_hand = Hand([Card(suit, v) for v in not_royal_vals])
-    assert hand.check_royal_flush()
-    assert not not_royal_hand.check_royal_flush()
+    # suit = 'Hearts'
+    # royal_vals = ['A', 'K', 'Q', 'J', 10]
+    # not_royal_vals = ['A', 'K', 'K', 'J', 10]
+    # hand = Hand([Card(suit, v) for v in royal_vals])
+    # not_royal_hand = Hand([Card(suit, v) for v in not_royal_vals])
+    # assert hand.check_royal_flush()
+    # assert not not_royal_hand.check_royal_flush()
 
-    # Straight Flush
-    sf_suit = 'Hearts'
-    v1 = [2, 3, 4, 5, 6]
-    v2 = ['A', 2, 3, 4, 5]
-    v3 = [9, 10, 'J', 'Q', 'K']
-    v4 = [10, 'J', 'Q', 'K', 'A']
-    iv1 = ['A', 2, 3, 4, 'K']
-    iv2 = ['J', 'Q', 'A', 2, 'K']
-    iv3 = ['K', 'K', 10, 'J', 'Q']
-    iv4 = [9, 'J', 'Q', 'A', 'K']
-    valid_hands = (Hand([Card(sf_suit, v) for v in v1]),
-                   Hand([Card(sf_suit, v) for v in v2]),
-                   Hand([Card(sf_suit, v) for v in v3]),
-                   Hand([Card(sf_suit, v) for v in v4]))
+    # # Straight Flush
+    # sf_suit = 'Hearts'
+    # v1 = [2, 3, 4, 5, 6]
+    # v2 = ['A', 2, 3, 4, 5]
+    # v3 = [9, 10, 'J', 'Q', 'K']
+    # v4 = [10, 'J', 'Q', 'K', 'A']
+    # iv1 = ['A', 2, 3, 4, 'K']
+    # iv2 = ['J', 'Q', 'A', 2, 'K']
+    # iv3 = ['K', 'K', 10, 'J', 'Q']
+    # iv4 = [9, 'J', 'Q', 'A', 'K']
+    # valid_hands = (Hand([Card(sf_suit, v) for v in v1]),
+    #                Hand([Card(sf_suit, v) for v in v2]),
+    #                Hand([Card(sf_suit, v) for v in v3]),
+    #                Hand([Card(sf_suit, v) for v in v4]))
 
-    invalid_hands = (Hand([Card(sf_suit, v) for v in iv1]),
-                     Hand([Card(sf_suit, v) for v in iv2]),
-                     Hand([Card(sf_suit, v) for v in iv3]),
-                     Hand([Card(sf_suit, v) for v in iv4]))
+    # invalid_hands = (Hand([Card(sf_suit, v) for v in iv1]),
+    #                  Hand([Card(sf_suit, v) for v in iv2]),
+    #                  Hand([Card(sf_suit, v) for v in iv3]),
+    #                  Hand([Card(sf_suit, v) for v in iv4]))
 
-    for i in range(len(valid_hands)):
-        h, ih = valid_hands[i], invalid_hands[i]
-        assert h.check_straight_flush()
-        assert not ih.check_straight_flush()
+    # for i in range(len(valid_hands)):
+    #     h, ih = valid_hands[i], invalid_hands[i]
+    #     assert h.check_straight_flush()
+    #     assert not ih.check_straight_flush()
 
-    # Flush check
-    for i in range(len(valid_hands)):
-        h, ih = valid_hands[i], invalid_hands[i]
-        assert h.check_flush()
-        assert ih.check_flush()
-        # print(h.get_best_hand())
-        # print(h.get_sorted())
-        # print(ih.get_best_hand())
-        # print(ih.get_sorted())
+    # # Flush check
+    # for i in range(len(valid_hands)):
+    #     h, ih = valid_hands[i], invalid_hands[i]
+    #     assert h.check_flush()
+    #     assert ih.check_flush()
 
-    # print(hand.get_best_hand())
-
-
-
-
+    # ===================== TEST ROUND: Basic test =====================
 
 
 
     # res = pytest.main(["-k", " or ".join(sys.argv[1:]), "-v", __file__])
+    pass
