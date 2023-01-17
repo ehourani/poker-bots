@@ -452,6 +452,12 @@ class PokerGame():
             action, amount = turn_player.action()
             self.execute_action(turn_player, action, amount)
 
+            # Special case: little blind pays remainder after checking
+            if turn_player == small_blind and len(self.table) == 1:
+                if action == 'Check':
+                    dif = self.round_cost - self.cost // 2
+                    self.collect_payment(dif, turn_player)
+
             # Get next player
             playing_i = next_i(playing_i, self.get_active_players())
 
