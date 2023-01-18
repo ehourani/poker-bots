@@ -3,6 +3,9 @@
 import random
 from functools import total_ordering
 
+VALID_SUITS = {'Hearts', 'Diamonds', 'Spades', 'Clubs'}
+VALID_VALUES = {*range(2, 11)} | {'J', 'Q', 'K', 'A'}
+CARDS_IN_A_DECK = 52
 CARDS_IN_A_HAND = 5
 STARTING_NUM_CARDS = 2
 MAX_CARDS_ON_TABLE = 3
@@ -21,51 +24,86 @@ def next_i(start, array):
 
 @total_ordering
 class Card():
-    """Represents a playing card.
-       Requires suit = {Hearts, Diamonds, Spades, Clubs} and
-       val = 2-10, J, Q, K, A"""
+    """
+    Represents a playing card.
+
+    Rep invariant:
+        suit must be in {'Hearts', 'Diamonds', 'Spades', 'Clubs'}
+        val must be in {2-10, 'J', 'Q', 'K', 'A'}
+        val must be a string or an integer
+
+    Abstraction function:
+        AF(suit, val) = Card of suit `suit` with value `val`
+    """
 
     def __init__(self, suit, val):
         self.suit = suit
         self.val = val
+        self._checkrep()
+
+    def _checkrep(self):
+        assert self.suit in VALID_SUITS
+        assert self.val in VALID_VALUES
 
     def get_suit(self):
+        self._checkrep()
         return self.suit
 
     def get_val(self):
+        self._checkrep()
         return self.val
 
     def __str__(self):
+        self._checkrep()
         return f'{self.val} of {self.suit}'
 
     def __repr__(self):
+        self._checkrep()
         return str(self)
 
     def __eq__(self, other):
         if not isinstance(other, Card):
             raise TypeError("Improper comparison type")
+        self._checkrep()
         return self.suit == other.suit and self.val == other.val
 
     def __gt__(self, other):
         if not isinstance(other, Card):
             raise TypeError("Improper comparison type")
+        self._checkrep()
         return self.val > other.val
 
     def __hash__(self):
+        self._checkrep()
         return hash((self.suit, self.val))
 
 
 class Deck():
-    """Represents a deck of cards as an array.
-       Top card corresponds to index 0"""
+    """
+    Represents a deck of cards as an array.
+    Top card corresponds to index 0
+
+    Rep invariant:
+        must be composed of card objects
+        cannot have duplicate cards
+        may only have at most 52 cards
+
+    Abstraction function:
+        AF(deck) = Standard deck
+
+    """
 
     def __init__(self):
-        suits = ['Hearts', 'Diamonds', 'Spades', 'Clubs']
-        values = [2, 3, 4, 5, 6, 7, 8, 9, 10, 'J', 'Q', 'K', 'A']
         self.deck = []
-        for suit in suits:
-            for val in values:
+        for suit in VALID_SUITS:
+            for val in VALID_VALUES:
                 self.deck += [Card(suit, val)]
+        self._checkrep()
+
+    def _checkrep(self):
+        assert len(set(self.deck)) == CARDS_IN_A_DECK
+        for card in self.deck:
+            assert isinstance(card, Card)
 
     def shuffle(self):
         deck_len = len(self.deck)
@@ -74,6 +112,7 @@ class Deck():
         for i in shuffle_indices:
             new_deck.append(self.deck[i])
         self.deck = [] + new_deck
+        self._checkrep()
 
     def draw(self, num_cards):
         cards = []
@@ -83,17 +122,31 @@ class Deck():
         for i in range(num_cards):
             cards.append(self.deck[-1])
             self.deck = self.deck[:-1]
+
+        self._checkrep()
         return cards
 
     def get_num_cards(self):
+        self._checkrep()
         return len(self.deck)
 
 
 class Player():
-    """Represents a player in a poker game.
-            Strategy in {random, conservative, aggressive}
-            hand (Hand): player's current hand
-            bal (float): player balance"""
+    """
+    Represents a player in a poker game.
+        bal (float): player balance
+        name (str): player name
+        hand (Hand): player's current hand
+        strategy (str): player strategy (in {random, conservative, aggressive})
+
+    Rep invariant:
+        bal >= 0
+        strategy in strategies dictionary
+
+    Abstraction function:
+        AF(bal, name, hand, strategy) = Player name `name` with balance `bal`,
+                                        hand `hand`, and strategy `strategy`
+    """
 
     strategies = {
         'random': lambda args: random.choice(args)
@@ -104,48 +157,80 @@ class Player():
         self.name = name
         self.hand = Hand() if hand is None else hand
         self.strategy = strategy
+        self._checkrep()
+
+    def _checkrep(self):
+        assert self.bal >= 0
+        assert self.strategy in self.strategies
+        assert isinstance(self.hand, Hand)
+        assert isinstance(self.name, str)
 
     def has_full_hand(self):
+        self._checkrep()
         return len(self.hand) == CARDS_IN_A_HAND
 
     def get_hand(self):
+        self._checkrep()
         return Hand(self.hand.get_cards())
 
     def add_card(self, card):
         self.hand.add_card(card)
+        self._checkrep()
 
     def get_bal(self):
+        self._checkrep()
         return self.bal
 
     def set_bal(self, bal):
         if bal < 0:
             raise Exception("Negative bal; player cannot go in debt")
         self.bal = bal
+        self._checkrep()
 
-    def action(self, action=None):
-        if action is not None:
-            return action
-        return 'Fold', 0
-
-    # def __eq__(self, other):
-        # return self.bal == other.bal and self.name == other.name and \
-        #     self.hand == other.hand and self.strategy == other.strategy
+    def action(self, requested_action=None):
+        if requested_action is not None:
+            self._checkrep()
+            return requested_action
+        actions = ['Fold', 'Check', 'Raise']
+        action = self.strategies[self.strategy](actions)
+        if action == 'Raise':
+            self._checkrep()
+            return action, 10
+        self._checkrep()
+        return action, 0
 
     def __str__(self):
         player_str = f'Player: {self.name}\nBal: {self.bal}\n' + \
                      f'Strategy: {self.strategy}\nHand {self.hand}'
+        self._checkrep()
         return player_str
 
     def __repr__(self):
+        self._checkrep()
         return str(self)
-
-    # def __hash__(self):
-    #     return hash((self.bal, self.name, self.hand, self.strategy))
 
 
 @total_ordering
 class Hand():
-    """Hand class to be used for checking"""
+    """
+    Hand class to be used for checking
+
+    Rep invariant:
+        cards
+            len(cards) <= 5
+            cards must be made up of only Card objects
+            no duplicates in cards
+            len(daa) == 13
+
+        daa
+            0 <= daa[i] <= 4 for for 0 <= i <= 13
+            0 <= sum(daa) <= 5
+            val = cards[i].val for 0 <= i <= len(cards)
+            daa[i] = hand.count(val) for 0 <= i <= 13
+
+    Abstraction function:
+        AF(suit, val) = Card of suit `suit` with value `val`
+    """
 
     checkers = {
         'royal flush': lambda h: h.check_royal_flush(),
@@ -167,11 +252,29 @@ class Hand():
             val = c.get_val()
             i = VALS_MAPPING[val] - 2
             self.daa[i] += 1
+        self._checkrep()
+
+    def _checkrep(self):
+        assert len(self.cards) <= CARDS_IN_A_HAND
+
+        vals_list = []
+        for card in self.cards:
+            assert isinstance(card, Card)
+            val = card.get_val()
+            vals_list.append(VALS_MAPPING[val] - 2)
+        assert len(set(self.cards)) == len(self.cards)
+
+        assert len(self.daa) == 13
+        assert sum(self.daa) <= 5
+        for i in range(len(self.daa)):
+            assert self.daa[i] <= 4
+            assert self.daa[i] == vals_list.count(i)
 
     def get_cards(self):
         cards_list = []
         for card in self.cards:
             cards_list.append(Card(card.get_suit(), card.get_val()))
+        self._checkrep()
         return cards_list
 
     def add_card(self, card):
@@ -180,6 +283,7 @@ class Hand():
         val = card.get_val()
         i = VALS_MAPPING[val] - 2
         self.daa[i] += 1
+        self._checkrep()
 
     def check_royal_flush(self):
         vals = set([c.get_val() for c in self.cards])
@@ -198,6 +302,7 @@ class Hand():
         first_suit = self.cards[0].get_suit()
         for c in self.cards:
             if c.get_suit() != first_suit:
+                self._checkrep()
                 return False
         return True
 
@@ -228,6 +333,7 @@ class Hand():
             checker = self.checkers[hand_check]
             is_hand = checker(self)
             if is_hand:
+                self._checkrep()
                 return hand_check
 
     def get_sorted(self):
@@ -259,6 +365,7 @@ class Hand():
             raise TypeError("Improper comparison type")
         best, score = self.get_best_hand(), self.get_sorted()
         other_best, other_score = other.get_best_hand(), other.get_sorted()
+        self._checkrep()
         return best == other_best and score == other_score
 
     def __gt__(self, other):
@@ -270,7 +377,9 @@ class Hand():
         other_i = HAND_RANKINGS.index(other_type)
 
         if i == other_i:
+            self._checkrep()
             return score > other_score
+        self._checkrep()
         return i < other_i
 
     def __str__(self):
@@ -283,19 +392,23 @@ class Hand():
             output += self.get_best_hand()
             for c in self.cards:
                 output += '\n\t' + str(c)
+        self._checkrep()
         return output
 
     def __repr__(self):
+        self._checkrep()
         return str(self)
 
     def __hash__(self):
         cards_tup = tuple(self.cards)
+        self._checkrep()
         return hash(cards_tup)
 
 
 class PokerGame():
     """Represents a poker game (Texas Hold 'em). Args:
             players (list of Player objects): all participating players
+            cost (float): cost to play
 
     Poker game round progression:
         1. Deal out 2 cards to each player
@@ -308,6 +421,25 @@ class PokerGame():
         6. Steps 4 & 5 are repeated until either:
             - Only 1 player is left; they pocket the pot
             - 3 cards are on the table; each player compares hands for winner
+
+    Rep invariant:
+        type checks satisfied
+        players >= 3
+        cost >= 0
+        len(p.hand) <= 2 for p in players
+
+        pot >= 0
+        round_cost >= 0
+        table has no duplicate cards
+        len(table) <= 3
+        0 <= big_i < len(players)
+        0 <= small_i < len(players)
+
+        p in player_status for p in players
+        player_status[p] in {'Active', 'Folded', 'Checked'}
+
+    Abstraction function:
+        AF(args) = Poker game with specs following args
     """
 
     def __init__(self, players, cost):
@@ -330,22 +462,49 @@ class PokerGame():
         for player in players:
             self.player_status[player] = 'Active'
 
+    def _checkrep(self):
+        assert isinstance(self.round, int)
+        assert isinstance(self.small_i, int)
+        assert isinstance(self.big_i, int)
+        assert isinstance(self.player_status, dict)
+        for p in self.players:
+            assert isinstance(p, Player)
+            assert len(p.get_hand().get_cards()) <= 2
+            assert p in self.player_status
+            assert self.player_status[p] in {'Active', 'Folded', 'Checked'}
+        for c in self.table:
+            assert isinstance(c, Card)
+
+        assert len(self.players) >= 3
+        assert self.cost >= 0
+        assert self.pot >= 0
+        assert self.round_cost >= 0
+        assert len(self.table) <= MAX_CARDS_ON_TABLE
+        assert self.big_i < len(self.players) and self.big_i >= 0
+        assert self.small_i < len(self.players) and self.small_i >= 0
+
     def get_round_cost(self):
+        self._checkrep()
         return self.round_cost
 
     def get_pot(self):
+        self._checkrep()
         return self.pot
 
     def get_table(self):
+        self._checkrep()
         return self.table[:]
 
     def get_round(self):
+        self._checkrep()
         return self.round
 
     def get_blind_indices(self):
+        self._checkrep()
         return self.small_i, self.big_i
 
     def get_player_status(self):
+        self._checkrep()
         return self.player_status.copy()
 
     def reset_game(self):
@@ -357,11 +516,13 @@ class PokerGame():
         self.big_i = (self.round + 1) % len(self.players)  # 1st big
         for player in self.players:
             self.player_status[player] = 'Active'
+        self._checkrep()
 
     def collect_payment(self, amount, player):
         new_player_bal = player.get_bal() - amount
         player.set_bal(new_player_bal)
         self.pot += amount
+        self._checkrep()
 
     def pay_player(self, amount, player):
         if amount > self.pot:
@@ -369,23 +530,27 @@ class PokerGame():
         new_player_bal = player.get_bal() + amount
         self.pot -= amount
         player.set_bal(new_player_bal)
+        self._checkrep()
 
     def get_active_players(self):
-        active_players = set()
+        active_players = []
         for player in self.players:
-            print('\nPlayer', player, '\nStatus', self.player_status)
             status = self.player_status[player]
             if status == 'Active' or status == 'Checked':
-                active_players.add(player)
+                active_players.append(player)
+        self._checkrep()
         return active_players
 
     def deactivate_player(self, player):
         self.player_status[player] = 'Folded'
+        self._checkrep()
 
     def is_all_checked(self):
         for player in self.player_status:
             if self.player_status[player] != 'Checked':
+                self._checkrep()
                 return False
+        self._checkrep()
         return True
 
     def get_all_checked(self):
@@ -393,6 +558,7 @@ class PokerGame():
         for player in self.player_status:
             if self.player_status[player] == 'Checked':
                 checked_players.add(player)
+        self._checkrep()
         return checked_players
 
     def execute_action(self, player, action, amount):
@@ -415,8 +581,6 @@ class PokerGame():
                 raise ValueError("Unexpected player action")
 
     def play_round(self):
-        assert len(self.table) <= MAX_CARDS_ON_TABLE
-
         # 1. Initialize game if it's first turn
         if self.round == 0:
             for i in range(STARTING_NUM_CARDS):
@@ -482,6 +646,7 @@ class PokerGame():
         # Pay winner and reset game
         [self.pay_player(self.pot // len(winner), p) for p in winner]
         self.reset_game()
+        self._checkrep()
         return winner
 
 
@@ -544,7 +709,8 @@ if __name__ == '__main__':
 
     p1, p2, p3 = Player(100, 'John'), Player(100, 'Emily'), Player(100, 'Sam')
     game = PokerGame([p1, p2, p3], 10)
-    game.play_round()
-    print(p1)
+    print(game.play_round())
+    print(game.get_player_status())
+    # print(p1)
 
     # game.first_round()
