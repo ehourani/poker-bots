@@ -101,7 +101,8 @@ class Deck():
         self._checkrep()
 
     def _checkrep(self):
-        assert len(set(self.deck)) == CARDS_IN_A_DECK
+        assert len(set(self.deck)) == len(self.deck)
+        assert len(self.deck) > 0
         for card in self.deck:
             assert isinstance(card, Card)
 
@@ -144,8 +145,7 @@ class Player():
         strategy in strategies dictionary
 
     Abstraction function:
-        AF(bal, name, hand, strategy) = Player name `name` with balance `bal`,
-                                        hand `hand`, and strategy `strategy`
+        AF(bal, name, hand, strategy, all_in_flag) = Player satisfying args
     """
 
     strategies = {
@@ -157,6 +157,7 @@ class Player():
         self.name = name
         self.hand = Hand() if hand is None else hand
         self.strategy = strategy
+        self.all_in_flag = False
         self._checkrep()
 
     def _checkrep(self):
@@ -187,7 +188,23 @@ class Player():
         self.bal = bal
         self._checkrep()
 
+    def is_all_in(self):
+        self._checkrep()
+        return self.all_in_flag
+
+    def all_in(self):
+        assert not self.all_in_flag
+        self.all_in_flag = True
+        self._checkrep()
+
+    def disable_all_in(self):
+        self.all_in_flag = False
+        self._checkrep()
+
     def action(self, requested_action=None):
+        if self.all_in:
+            self._checkrep()
+            return 'Check', None
         if requested_action is not None:
             self._checkrep()
             return requested_action
@@ -516,6 +533,7 @@ class PokerGame():
         self.big_i = (self.round + 1) % len(self.players)  # 1st big
         for player in self.players:
             self.player_status[player] = 'Active'
+            player.disable_all_in()
         self._checkrep()
 
     def collect_payment(self, amount, player):
@@ -567,12 +585,19 @@ class PokerGame():
                 self.deactivate_player(player)
 
             case 'Check':
-                self.collect_payment(self.round_cost, player)
+                if player.is_all_in():
+                    self.collect_payment(player.get_bal(), player)
+                else:
+                    self.collect_payment(self.round_cost, player)
                 self.player_status[player] = 'Checked'
 
             case 'Raise':
-                self.collect_payment(amount, player)
-                self.round_cost += amount
+                if player.is_all_in():
+                    self.collect_payment(player.get_bal(), player)
+                    self.round_cost += player.get_bal()
+                else:
+                    self.collect_payment(amount, player)
+                    self.round_cost += amount
                 for other_player in self.get_active_players():
                     self.player_status[other_player] = 'Active'
                 self.player_status[player] = 'Checked'
@@ -583,6 +608,10 @@ class PokerGame():
     def play_round(self):
         # 1. Initialize game if it's first turn
         if self.round == 0:
+            for player in self.players:
+                if player.get_bal() == 0:
+                    self.deactivate_player(player)
+
             for i in range(STARTING_NUM_CARDS):
                 for player in self.get_active_players():
                     card_list = self.deck.draw(1)
@@ -595,14 +624,23 @@ class PokerGame():
         # 3, 4. Big/small blind assigned and pay    # TODO: Add all-in support
         active = self.get_active_players()
         small_blind, big_blind = active[self.small_i], active[self.big_i]
-        self.collect_payment(self.cost // 2, small_blind)
-        self.collect_payment(self.cost, big_blind)
+        if small_blind.get_bal() <= self.cost // 2:
+            small_blind.all_in()
+            self.collect_payment(small_blind.get_bal(), small_blind)
+        else:
+            self.collect_payment(self.cost // 2, small_blind)
+
+        if big_blind.get_bal() <= self.cost:
+            big_blind.all_in()
+            self.collect_payment(big_blind.get_bal(), big_blind)
+        else:
+            self.collect_payment(self.cost, big_blind)
 
         # Set initial player index
         playing_i = next_i(self.big_i, active)
 
         # 5. Loop over players until all but 1 fold
-        while len(self.get_active_players()) > 1 and len(self.table) <= 3:
+        while len(self.get_active_players()) > 1 and len(self.table) < 3:
 
             # If all players checked, draw 1 card and reactivate
             if self.is_all_checked():
@@ -710,7 +748,7 @@ if __name__ == '__main__':
     p1, p2, p3 = Player(100, 'John'), Player(100, 'Emily'), Player(100, 'Sam')
     game = PokerGame([p1, p2, p3], 10)
     print(game.play_round())
-    print(game.get_player_status())
+    print('\n\n', game.get_player_status())
     # print(p1)
 
     # game.first_round()
