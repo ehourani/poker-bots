@@ -150,6 +150,7 @@ class Player():
         AF(bal, name, hand, strategy, all_in_flag) = Player satisfying args
     """
 
+    # TODO: Add more strategies
     strategies = {
         'random': lambda args: random.choice(args)
     }
@@ -662,18 +663,19 @@ class PokerGame():
                 raise ValueError("Unexpected player action")
 
     def play_round(self):
-        # 1. Initialize game
+        # Ensure no players with bal 0 can play
         for player in self.players:
             if player.get_bal() == 0:
                 self.deactivate_player(player)
 
+        # Initialize game
         for i in range(STARTING_NUM_CARDS):
             for player in self.get_active_players():
                 card_list = self.deck.draw(1)
                 card = card_list[0]
                 player.add_card(card)
 
-        # 2, 3. Big/small blind assigned and pay
+        # Big/small blind assigned and pay
         active = self.get_active_players()
         small_blind, big_blind = active[self.small_i], active[self.big_i]
         if small_blind.get_bal() <= self.cost // 2:
@@ -691,7 +693,7 @@ class PokerGame():
         # Set initial player index
         playing_i = next_i(self.big_i, active)
 
-        # Loop over players until all but 1 fold
+        # Loop over players until all but 1 fold            # TODO: Adjust to follow poker game rules (3 starting cards, not 1)
         while len(self.get_active_players()) > 1:
 
             # If all players checked, draw 1 card and reactivate
