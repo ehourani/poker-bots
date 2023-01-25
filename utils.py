@@ -9,6 +9,8 @@ CARDS_IN_A_DECK = 52
 CARDS_IN_A_HAND = 5
 STARTING_NUM_CARDS = 2
 MAX_CARDS_ON_TABLE = 3
+MIN_NUM_PLAYERS = 2
+MAX_NUM_PLAYERS = 14
 ROYAL_FLUSH_VALS = set(['A', 'K', 'Q', 'J', 10])
 VALS_MAPPING = {2: 2, 3: 3, 4: 4, 5: 5, 6: 6,
                 7: 7, 8: 8, 9: 9, 10: 10, 'J': 11,
@@ -296,8 +298,6 @@ class Hand():
             assert isinstance(card, Card)
             val = card.get_val()
             vals_list.append(VALS_MAPPING[val] - 2)
-        # if len(set(self.cards)) != len(self.cards):
-        #     print(self.cards)
         assert len(set(self.cards)) == len(self.cards)
 
         assert len(self.daa) == 13
@@ -460,7 +460,7 @@ class PokerGame():
 
     Rep invariant:
         type checks satisfied
-        players >= 3
+        2 <= players <= 14
         cost >= 0
         len(p.hand) <= 2 for p in players
 
@@ -529,7 +529,8 @@ class PokerGame():
         for c in self.table:
             assert isinstance(c, Card)
 
-        assert len(self.players) >= 3
+        assert len(self.players) >= MIN_NUM_PLAYERS
+        assert len(self.players) <= MAX_NUM_PLAYERS
         assert self.cost >= 0
         assert self.pot >= 0
         assert self.round_cost >= 0
