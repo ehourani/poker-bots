@@ -166,6 +166,10 @@ class Player():
         assert isinstance(self.hand, Hand)
         assert isinstance(self.name, str)
 
+    def get_name(self):
+        self._checkrep()
+        return self.name
+
     def has_full_hand(self):
         self._checkrep()
         return len(self.hand) == CARDS_IN_A_HAND
@@ -203,22 +207,35 @@ class Player():
 
     def action(self, requested_action=None):
         if self.all_in:
+            # if self.bal > 0:
             self._checkrep()
             return 'Check', None
+            # return 'Fold', 0
+
         if requested_action is not None:
             self._checkrep()
             return requested_action
-        actions = ['Fold', 'Check', 'Raise']
+
+        actions = {'Fold', 'Check', 'Raise', 'All-in'}
         action = self.strategies[self.strategy](actions)
         if action == 'Raise':
             self._checkrep()
             return action, 10
+        elif action == 'All-in':
+            self.all_in()
+            self._checkrep()
+            return 'Raise', self.bal
         self._checkrep()
         return action, 0
 
+    def clear_hand(self):
+        self.hand = Hand()
+        self._checkrep()
+
     def __str__(self):
         player_str = f'Player: {self.name}\nBal: {self.bal}\n' + \
-                     f'Strategy: {self.strategy}\nHand {self.hand}'
+                     f'Strategy: {self.strategy}\n' + \
+                     f'All-in: {self.all_in_flag}\nHand {self.hand}'
         self._checkrep()
         return player_str
 
@@ -279,6 +296,8 @@ class Hand():
             assert isinstance(card, Card)
             val = card.get_val()
             vals_list.append(VALS_MAPPING[val] - 2)
+        # if len(set(self.cards)) != len(self.cards):
+        #     print(self.cards)
         assert len(set(self.cards)) == len(self.cards)
 
         assert len(self.daa) == 13
@@ -457,6 +476,16 @@ class PokerGame():
 
     Abstraction function:
         AF(args) = Poker game with specs following args
+
+
+    Player status summary:
+        - Active: Player is playing in current round and is awaiting their turn
+        - Inactive: Player does not have enough money to participate in
+                    remainder of game
+        - Folded: Player is playing in current round but has folded and is no
+                  longer active (will not play in next turn)
+        - Checked: Player is playing in current round and has already checked;
+                   player is awaiting next turn
     """
 
     def __init__(self, players, cost):
@@ -467,6 +496,11 @@ class PokerGame():
         self.cost = cost
         self.deck = Deck()
         self.deck.shuffle()                         # Start with shuffled deck
+
+        # For check_rep purposes
+        self.start_amount = 0
+        for player in self.players:
+            self.start_amount += player.get_bal()
 
         # Changing class attributes (round-level)
         self.round = 0                                     # Start on 0th round
@@ -484,11 +518,14 @@ class PokerGame():
         assert isinstance(self.small_i, int)
         assert isinstance(self.big_i, int)
         assert isinstance(self.player_status, dict)
+        total_money = self.pot + sum([p.get_bal() for p in self.players])
+        assert total_money == self.start_amount
         for p in self.players:
             assert isinstance(p, Player)
             assert len(p.get_hand().get_cards()) <= 2
             assert p in self.player_status
-            assert self.player_status[p] in {'Active', 'Folded', 'Checked'}
+            assert self.player_status[p] in {'Active', 'Folded', 'Checked',
+                                             'Inactive'}
         for c in self.table:
             assert isinstance(c, Card)
 
@@ -529,11 +566,16 @@ class PokerGame():
         self.round += 1
         self.round_cost = self.cost
         self.table = []
-        self.small_i = self.round % len(self.players)      # 1st small
-        self.big_i = (self.round + 1) % len(self.players)  # 1st big
-        for player in self.players:
-            self.player_status[player] = 'Active'
-            player.disable_all_in()
+        for p in self.players:
+            self.player_status[p] = 'Active' if p.get_bal() > 0 else 'Inactive'
+            p.disable_all_in()
+            p.clear_hand()
+        active = self.get_active_players()
+        self.small_i = self.round % len(active)      # 1st small
+        self.big_i = (self.round + 1) % len(active)  # 1st big
+
+        self.deck = Deck()
+        self.deck.shuffle()                         # Start with shuffled deck
         self._checkrep()
 
     def collect_payment(self, amount, player):
@@ -565,7 +607,7 @@ class PokerGame():
 
     def is_all_checked(self):
         for player in self.player_status:
-            if self.player_status[player] != 'Checked':
+            if self.player_status[player] not in ('Checked', 'Folded'):
                 self._checkrep()
                 return False
         self._checkrep()
@@ -579,25 +621,38 @@ class PokerGame():
         self._checkrep()
         return checked_players
 
-    def execute_action(self, player, action, amount):
+    def execute_action(self, player, action, amount, blind=None):
+        if player.get_bal() < self.round_cost:
+            if not player.is_all_in():
+                player.all_in()
+
         match action:
             case 'Fold':
                 self.deactivate_player(player)
 
             case 'Check':
                 if player.is_all_in():
-                    self.collect_payment(player.get_bal(), player)
+                    pymt = player.get_bal()
+                elif blind == 'Small':
+                    pymt = self.round_cost // 2
+                elif blind == 'Big':
+                    pymt = 0
                 else:
-                    self.collect_payment(self.round_cost, player)
+                    pymt = self.round_cost
+
+                self.collect_payment(pymt, player)
                 self.player_status[player] = 'Checked'
 
             case 'Raise':
                 if player.is_all_in():
-                    self.collect_payment(player.get_bal(), player)
-                    self.round_cost += player.get_bal()
+                    amount = player.get_bal()
+                self.collect_payment(amount, player)
+
+                if blind == 'Small':
+                    self.round_cost += (amount - self.round_cost // 2)
                 else:
-                    self.collect_payment(amount, player)
                     self.round_cost += amount
+
                 for other_player in self.get_active_players():
                     self.player_status[other_player] = 'Active'
                 self.player_status[player] = 'Checked'
@@ -606,22 +661,18 @@ class PokerGame():
                 raise ValueError("Unexpected player action")
 
     def play_round(self):
-        # 1. Initialize game if it's first turn
-        if self.round == 0:
-            for player in self.players:
-                if player.get_bal() == 0:
-                    self.deactivate_player(player)
+        # 1. Initialize game
+        for player in self.players:
+            if player.get_bal() == 0:
+                self.deactivate_player(player)
 
-            for i in range(STARTING_NUM_CARDS):
-                for player in self.get_active_players():
-                    card_list = self.deck.draw(1)
-                    card = card_list[0]
-                    player.add_card(card)
+        for i in range(STARTING_NUM_CARDS):
+            for player in self.get_active_players():
+                card_list = self.deck.draw(1)
+                card = card_list[0]
+                player.add_card(card)
 
-        # 2. Draw a card on the table
-        self.table += self.deck.draw(1)
-
-        # 3, 4. Big/small blind assigned and pay    # TODO: Add all-in support
+        # 2, 3. Big/small blind assigned and pay
         active = self.get_active_players()
         small_blind, big_blind = active[self.small_i], active[self.big_i]
         if small_blind.get_bal() <= self.cost // 2:
@@ -639,11 +690,13 @@ class PokerGame():
         # Set initial player index
         playing_i = next_i(self.big_i, active)
 
-        # 5. Loop over players until all but 1 fold
-        while len(self.get_active_players()) > 1 and len(self.table) < 3:
+        # Loop over players until all but 1 fold
+        while len(self.get_active_players()) > 1:
 
             # If all players checked, draw 1 card and reactivate
             if self.is_all_checked():
+                if len(self.table) == 3:
+                    break
                 self.table += self.deck.draw(1)
                 for player in self.get_all_checked():
                     self.player_status[player] = 'Active'
@@ -652,20 +705,22 @@ class PokerGame():
             # Get action of the player whose turn it is
             turn_player = self.get_active_players()[playing_i]
             action, amount = turn_player.action()
-            self.execute_action(turn_player, action, amount)
 
-            # Special case: little blind pays remainder after checking
-            if turn_player == small_blind and len(self.table) == 1:
-                if action == 'Check':
-                    dif = self.round_cost - self.cost // 2
-                    self.collect_payment(dif, turn_player)
+            blind = None
+            if len(self.table) == 0:
+                if turn_player == small_blind:
+                    blind = 'Small'
+                elif turn_player == big_blind:
+                    blind = 'Big'
+
+            self.execute_action(turn_player, action, amount, blind=blind)
 
             # Get next player
             playing_i = next_i(playing_i, self.get_active_players())
 
         # Exit condition 1: all players but 1 folded; reset game and pay winner
         if len(self.get_active_players()) == 1:
-            winner = [turn_player]
+            winner = self.get_active_players()
 
         # Exit condition 2: 3 cards on table; evaluate best hand and pay winner
         elif len(self.table) == 3:
@@ -682,32 +737,56 @@ class PokerGame():
                     winner.append(player)
 
         # Pay winner and reset game
-        [self.pay_player(self.pot // len(winner), p) for p in winner]
+        winnings = self.pot // len(winner)
+        [self.pay_player(winnings, p) for p in winner]
         self.reset_game()
         self._checkrep()
         return winner
 
+    def iterate_game(self, num_rounds=None):
+        if num_rounds is None:
+            single_winner = False
+            while not single_winner:
+                self.play_round()
+                nonzero_players = set()
+                for p in self.players:
+                    if p.get_bal() > 0:
+                        nonzero_players.add(p)
+                single_winner = len(nonzero_players) == 1
+            return nonzero_players
+
+        for i in range(num_rounds):
+            self.play_round()
+        winner, max_bal = None, -1
+        for p in self.players:
+            bal = p.get_bal()
+            if winner is None:
+                winner, max_bal = {p}, bal
+            elif max_bal < bal:
+                winner, max_bal = {p}, bal
+            elif max_bal == bal:
+                winner.add(p)
+        return winner
+
+    def __str__(self):
+        game_str = f'=========Poker game========='
+        game_str += f'\n- Round {self.round}'
+        game_str += f'\n- Cost to play: {self.cost}'
+        game_str += f'\n- Round cost: {self.round_cost}'
+        game_str += f'\n- Table: {self.table}'
+        game_str += f'\n- Pot: {self.pot}'
+        game_str += f'\n- Big blind index: {self.big_i}'
+        game_str += f'\n- Small blind index: {self.small_i}\nPlayer status:'
+        for p in self.player_status:
+            game_str += '\n\n'
+            game_str += f'[{self.player_status[p].upper()}] ' + str(p)
+        return game_str
+
+    def __repr__(self):
+        return str(self)
+
 
 """
-Round function:
-    - If first turn:
-        - Give everyone 2 cards
-    - General case:
-        - Initiate little/big blind based on round
-        - Draw 1 card on table
-        - Have little/big blind pay
-        - Loop over all players until exit condition reached:
-            - Each player raises/checks/folds
-            - Exit condition: 1 non-fold left
-            - All checked: Add 1 more card (max 3)
-        - Do based on exit condition:
-            - 1 player: Give pot, increment round
-
-
-
-
-
-
 INDEPENDENT OF TURN:
     - players
     - cost
@@ -721,34 +800,20 @@ CHANGES EVERY TURN:
     - small/big blind
     - current cost to play
     - player status
-
-
-
-Possible statuses:
-    - Active (hasn't checked/folded yet)
-    - Folded (no longer in game, inactive)
-    - Checked (awaiting next card)
-
-Data structures:
-    - Status list
-    - Dictionary of {player : status}
-        - Can pull player status
-        - Iterate to get all active players
-    - Dictionary of {status : player}
-        - Can pull all active players
-        - Needs helper function to get status
-    - Player class tracking
 """
 
 
 if __name__ == '__main__':
-    # deck = Deck()
-    # deck.shuffle()
 
-    p1, p2, p3 = Player(100, 'John'), Player(100, 'Emily'), Player(100, 'Sam')
-    game = PokerGame([p1, p2, p3], 10)
-    print(game.play_round())
-    print('\n\n', game.get_player_status())
-    # print(p1)
+    # p1, p2, p3 = Player(100, 'Joe'), Player(100, 'Emily'), Player(100, 'Sam')
+    # game = PokerGame([p1, p2, p3], 20)
+    # for i in range(10000):
+    #     for p in game.iterate_game():
+    #         assert p.get_bal() == 300
+    #         print(p)
 
-    # game.first_round()
+    for i in range(10):
+        big = PokerGame([Player(100, c) for c in 'abcdefghijklmn'], 20)
+        print(big.iterate_game())
+
+    # print(game)
