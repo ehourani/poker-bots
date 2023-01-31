@@ -8,7 +8,7 @@ VALID_VALUES = {*range(2, 11)} | {'J', 'Q', 'K', 'A'}
 CARDS_IN_A_DECK = 52
 CARDS_IN_A_HAND = 5
 STARTING_NUM_CARDS = 2
-MAX_CARDS_ON_TABLE = 3
+MAX_CARDS_ON_TABLE = 5
 MIN_NUM_PLAYERS = 2
 MAX_NUM_PLAYERS = 14
 ROYAL_FLUSH_VALS = set(['A', 'K', 'Q', 'J', 10])
@@ -395,6 +395,7 @@ class Hand():
         sorted_score = ()
         for cnt, num in sorting_arr:
             sorted_score += (num, ) * cnt
+
         return sorted_score
 
     def __eq__(self, other):
@@ -520,6 +521,12 @@ class PokerGame():
         assert isinstance(self.big_i, int)
         assert isinstance(self.player_status, dict)
         total_money = self.pot + sum([p.get_bal() for p in self.players])
+        # try:
+        #     assert total_money == self.start_amount
+        # except AssertionError as ex:
+        #     print(ex)
+        #     print(self)
+        #     raise Exception
         assert total_money == self.start_amount
         for p in self.players:
             assert isinstance(p, Player)
@@ -662,6 +669,71 @@ class PokerGame():
             case _:
                 raise ValueError("Unexpected player action")
 
+    def get_best_hand(self, player):
+        '''
+        Helper function used in self.get_winner()
+        Max no. hands:
+        - 5 cards out: 7 choose 5 = 21 combinations per player
+            - 2 cards from player: 5 choose 3       = 10
+            - 1 card from player: (5 choose 4) x 2  = 10
+            - 0 cards from player: 5 choose 5       =  1
+                                                   + ----
+                                                      21 total
+        '''
+        hands = []
+        table = self.get_table()
+        # Case 1: Hand contains both of player's cards
+        for i in range(len(table)):
+            for j in range(i + 1, len(table)):
+                cards = table[:i] + table[i + 1:j] + table[j + 1:]
+                cards += player.get_hand().get_cards()
+                hands.append(Hand(cards))
+
+        # Case 2: Hand contains 1 card from player
+        for incl_card in player.get_hand().get_cards():
+            for i in range(len(table)):
+                hand = Hand([incl_card] + table[:i] + table[i + 1:])
+                hands.append(hand)
+
+        assert len(hands) == 20
+
+        hands.sort(reverse=True)
+
+        return hands[0]
+
+    def get_winner(self):
+        '''
+        Given the cards on the table, return the active
+        player(s) with the best hand. Returns a list of players.
+        '''
+
+        # Case 1: Single active player left
+        active = self.get_active_players()
+        if len(active) == 1:
+            return active
+
+        # Case 2: Multiple players left and table has 5 cards
+        assert len(self.table) == MAX_CARDS_ON_TABLE
+        winner, best_hand = [], Hand(self.table)
+
+        for player in self.get_active_players():
+            player_best_hand = self.get_best_hand(player)
+            if len(winner) == 0:
+                if player_best_hand >= best_hand:
+                    winner.append(player)
+            elif player_best_hand > best_hand:
+                winner, best_hand = [player], player_best_hand
+            elif player_best_hand == best_hand:
+                winner.append(player)
+
+        self._checkrep()
+        # if len(winner) == 0:
+        #     print('winner:', winner)
+        #     print('table', self.table)
+        #     print('best', best_hand)
+        #     print('players', [p.get_hand() for p in active])
+        return winner
+
     def play_round(self):
         # Ensure no players with bal 0 can play
         for player in self.players:
@@ -693,12 +765,13 @@ class PokerGame():
         # Set initial player index
         playing_i = next_i(self.big_i, active)
 
-        # Loop over players until all but 1 fold            # TODO: Adjust to follow poker game rules (3 starting cards, not 1)
+        # Loop over players until all but 1 fold
         while len(self.get_active_players()) > 1:
 
             # If all players checked, draw 1 card and reactivate
+            # TODO: Add support for burned cards
             if self.is_all_checked():
-                if len(self.table) == 3:
+                if len(self.table) == MAX_CARDS_ON_TABLE:
                     break
                 self.table += self.deck.draw(1)
                 for player in self.get_all_checked():
@@ -721,23 +794,29 @@ class PokerGame():
             # Get next player
             playing_i = next_i(playing_i, self.get_active_players())
 
-        # Exit condition 1: all players but 1 folded; reset game and pay winner
-        if len(self.get_active_players()) == 1:
-            winner = self.get_active_players()
+        # Exit condition 1: all players but 1 folded
+        # if len(self.get_active_players()) == 1:
+        #     winner = self.get_active_players()
 
-        # Exit condition 2: 3 cards on table; evaluate best hand and pay winner
-        elif len(self.table) == 3:
-            winner, winning_hand = None, None
-            for player in self.get_active_players():
-                eval_cards = player.get_hand().get_cards() + self.table[:]
-                assert len(eval_cards) == CARDS_IN_A_HAND
-                eval_hand = Hand(eval_cards)
-                if winner is None:
-                    winner, winning_hand = [player], eval_hand
-                elif winning_hand < eval_hand:
-                    winner, winning_hand = [player], eval_hand
-                elif winning_hand == eval_hand:
-                    winner.append(player)
+        # Exit condition 2: 3 cards on table; evaluate best hand
+        # elif len(self.table) == MAX_CARDS_ON_TABLE:
+        #     winner, winning_hand = None, None
+        #     for player in self.get_active_players():
+        #         eval_cards = player.get_hand().get_cards() + self.table[:]
+        #         assert len(eval_cards) == CARDS_IN_A_HAND
+        #         eval_hand = Hand(eval_cards)
+        #         if winner is None:
+        #             winner, winning_hand = [player], eval_hand
+        #         elif winning_hand < eval_hand:
+        #             winner, winning_hand = [player], eval_hand
+        #         elif winning_hand == eval_hand:
+        #             winner.append(player)
+
+        winner = self.get_winner()
+        if len(winner) == 0:
+            winner += self.get_active_players()
+            print("**************************NO WINNER*******************)")
+            raise Exception
 
         # Pay winner and reset game
         winnings = self.pot // len(winner)
@@ -808,15 +887,36 @@ CHANGES EVERY TURN:
 
 if __name__ == '__main__':
 
-    # p1, p2, p3 = Player(100, 'Joe'), Player(100, 'Emily'), Player(100, 'Sam')
-    # game = PokerGame([p1, p2, p3], 20)
-    # for i in range(10000):
-    #     for p in game.iterate_game():
-    #         assert p.get_bal() == 300
-    #         print(p)
+    p1, p2, p3 = Player(100, 'Joe'), Player(100, 'Emily'), Player(100, 'Sam')
+    game = PokerGame([p1, p2, p3], 20)
+    for i in range(10000):
+        for p in game.iterate_game():
+            assert p.get_bal() == 300
+            # print(p)
 
-    for i in range(10):
-        big = PokerGame([Player(100, c) for c in 'abcdefghijklmn'], 20)
-        print(big.iterate_game())
+    # for i in range(10):
+    #     big = PokerGame([Player(100, c) for c in 'abcdefghijklmn'], 20)
+    #     print(big.iterate_game())
+
+    # Testing sorting
+    # deck = Deck()
+    # deck.shuffle()
+    # hands = []
+    # for i in range(5):
+    #     hands.append(Hand(deck.draw(5)))
+
+    # hands.sort()
+    # print(hands)
 
     # print(game)
+
+    '''
+    Max no. hands:
+        - 3/4 cards out: winner results from only 1 player left
+        - 5 cards out: 7 choose 5 = 21 combinations per player
+            - 2 cards from player: 5 choose 3       = 10
+            - 1 card from player: (5 choose 4) x 2  = 10
+            - 0 cards from player: 5 choose 5       =  1
+                                                   + ----
+                                                      21 total
+    '''
