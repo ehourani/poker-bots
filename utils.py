@@ -756,7 +756,6 @@ class PokerGame():
         while len(self.get_active_players()) > 1:
 
             # If all players checked, draw 1 card and reactivate
-            # TODO: Add support for burned cards
             if self.is_all_checked():
                 if len(self.table) == MAX_CARDS_ON_TABLE:
                     break
