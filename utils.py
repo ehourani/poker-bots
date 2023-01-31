@@ -208,12 +208,10 @@ class Player():
         self.all_in_flag = False
         self._checkrep()
 
-    def action(self, requested_action=None):
+    def action(self, table=None, requested_action=None):
         if self.all_in:
-            # if self.bal > 0:
             self._checkrep()
             return 'Check', None
-            # return 'Fold', 0
 
         if requested_action is not None:
             self._checkrep()
@@ -521,12 +519,6 @@ class PokerGame():
         assert isinstance(self.big_i, int)
         assert isinstance(self.player_status, dict)
         total_money = self.pot + sum([p.get_bal() for p in self.players])
-        # try:
-        #     assert total_money == self.start_amount
-        # except AssertionError as ex:
-        #     print(ex)
-        #     print(self)
-        #     raise Exception
         assert total_money == self.start_amount
         for p in self.players:
             assert isinstance(p, Player)
@@ -727,11 +719,6 @@ class PokerGame():
                 winner.append(player)
 
         self._checkrep()
-        # if len(winner) == 0:
-        #     print('winner:', winner)
-        #     print('table', self.table)
-        #     print('best', best_hand)
-        #     print('players', [p.get_hand() for p in active])
         return winner
 
     def play_round(self):
@@ -773,6 +760,7 @@ class PokerGame():
             if self.is_all_checked():
                 if len(self.table) == MAX_CARDS_ON_TABLE:
                     break
+                self.deck.draw(1)                       # Burn a card
                 self.table += self.deck.draw(1)
                 for player in self.get_all_checked():
                     self.player_status[player] = 'Active'
@@ -794,33 +782,18 @@ class PokerGame():
             # Get next player
             playing_i = next_i(playing_i, self.get_active_players())
 
-        # Exit condition 1: all players but 1 folded
-        # if len(self.get_active_players()) == 1:
-        #     winner = self.get_active_players()
-
-        # Exit condition 2: 3 cards on table; evaluate best hand
-        # elif len(self.table) == MAX_CARDS_ON_TABLE:
-        #     winner, winning_hand = None, None
-        #     for player in self.get_active_players():
-        #         eval_cards = player.get_hand().get_cards() + self.table[:]
-        #         assert len(eval_cards) == CARDS_IN_A_HAND
-        #         eval_hand = Hand(eval_cards)
-        #         if winner is None:
-        #             winner, winning_hand = [player], eval_hand
-        #         elif winning_hand < eval_hand:
-        #             winner, winning_hand = [player], eval_hand
-        #         elif winning_hand == eval_hand:
-        #             winner.append(player)
-
         winner = self.get_winner()
         if len(winner) == 0:
             winner += self.get_active_players()
-            print("**************************NO WINNER*******************)")
-            raise Exception
 
         # Pay winner and reset game
         winnings = self.pot // len(winner)
+        leftover = self.pot % len(winner)
         [self.pay_player(winnings, p) for p in winner]
+        if leftover > 0:
+            rand_i = random.choice(range(len(winner)))
+            leftover_winner = winner[rand_i]
+            self.pay_player(leftover, leftover_winner)
         self.reset_game()
         self._checkrep()
         return winner
@@ -887,16 +860,16 @@ CHANGES EVERY TURN:
 
 if __name__ == '__main__':
 
-    p1, p2, p3 = Player(100, 'Joe'), Player(100, 'Emily'), Player(100, 'Sam')
-    game = PokerGame([p1, p2, p3], 20)
-    for i in range(10000):
-        for p in game.iterate_game():
-            assert p.get_bal() == 300
-            # print(p)
+    # p1, p2, p3 = Player(100, 'Joe'), Player(100, 'Emily'), Player(100, 'Sam')
+    # game = PokerGame([p1, p2, p3], 20)
+    # for i in range(10000):
+    #     for p in game.iterate_game():
+    #         assert p.get_bal() == 300
+    #         print(p)
 
-    # for i in range(10):
-    #     big = PokerGame([Player(100, c) for c in 'abcdefghijklmn'], 20)
-    #     print(big.iterate_game())
+    for i in range(10):
+        big = PokerGame([Player(100, c) for c in 'abcdefghijklmn'], 20)
+        print(big.iterate_game())
 
     # Testing sorting
     # deck = Deck()
